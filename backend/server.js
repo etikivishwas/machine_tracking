@@ -17,6 +17,13 @@ app.use("/api/auth", authRoutes);
 const workerRoutes = require("./routes/workers");
 app.use("/api/workers", workerRoutes);
 
+const truckRoutes = require("./routes/trucks");
+app.use("/api/trucks", truckRoutes);
+
+const machinesRoutes = require("./routes/machines");
+app.use("/machines", machinesRoutes);
+
+
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 
