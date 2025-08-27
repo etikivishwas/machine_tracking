@@ -11,13 +11,15 @@ router.get("/", (req, res) => {
   });
 });
 
-// Get worker by ID with logs
 // Get truck by ID with logs + tracker data
 router.get("/:id", (req, res) => {
   const truckId = req.params.id;
+  const { date } = req.query; // YYYY-MM-DD from frontend
 
   const truckSql = "SELECT * FROM trucks WHERE id = ?";
-  const logsSql = `
+
+  // Filter logs by date if provided
+  let logsSql = `
     SELECT 
       id,
       truck_id,
@@ -30,10 +32,16 @@ router.get("/:id", (req, res) => {
       log_time
     FROM truck_logs
     WHERE truck_id = ?
-    ORDER BY log_time;
   `;
+  const logParams = [truckId];
+  if (date) {
+    logsSql += " AND DATE(log_time) = ?";
+    logParams.push(date);
+  }
+  logsSql += " ORDER BY log_time;";
 
-  const trackerSql = `
+  // Filter tracker data by date if provided
+  let trackerSql = `
     SELECT 
       id,
       truck_id,
@@ -53,24 +61,32 @@ router.get("/:id", (req, res) => {
       geofence_alert
     FROM truck_tracker_data
     WHERE truck_id = ?
-    ORDER BY timestamp DESC
-    LIMIT 1;  -- latest GPS tracker data
   `;
+  const trackerParams = [truckId];
+  if (date) {
+    trackerSql += " AND DATE(timestamp) = ?";
+    trackerParams.push(date);
+  }
+  trackerSql += " ORDER BY timestamp DESC LIMIT 1;";
 
   db.query(truckSql, [truckId], (err, truckResults) => {
     if (err) return res.status(500).json({ error: "Database error" });
-    if (truckResults.length === 0) return res.status(404).json({ error: "Truck not found" });
+    if (truckResults.length === 0) {
+      return res.status(404).json({ error: "Truck not found" });
+    }
 
-    db.query(logsSql, [truckId], (err2, logResults) => {
+    // Logs query
+    db.query(logsSql, logParams, (err2, logResults) => {
       if (err2) return res.status(500).json({ error: "Database error" });
 
-      db.query(trackerSql, [truckId], (err3, trackerResults) => {
+      // Tracker query
+      db.query(trackerSql, trackerParams, (err3, trackerResults) => {
         if (err3) return res.status(500).json({ error: "Database error" });
 
         res.json({
           truck: truckResults[0],
           logs: logResults,
-          tracker: trackerResults.length ? trackerResults[0] : null
+          tracker: trackerResults.length ? trackerResults[0] : null,
         });
       });
     });
