@@ -11,7 +11,7 @@ router.get("/", (req, res) => {
   });
 });
 
-
+// Get machine by ID with logs + beacon data
 router.get("/:id", (req, res) => {
   const machineId = req.params.id;
 
@@ -26,10 +26,29 @@ router.get("/:id", (req, res) => {
       material_processed,
       state,
       log_date
-        FROM machine_logs
-        WHERE machine_id = ?
-        ORDER BY log_date;
-    `;
+    FROM machine_logs
+    WHERE machine_id = ?
+    ORDER BY log_date;
+  `;
+
+  const beaconSql = `
+    SELECT 
+      id,
+      machine_id,
+      deviceId,
+      timestamp,
+      accel_x,
+      accel_y,
+      accel_z,
+      rssi,
+      txPower,
+      batteryLevel,
+      status
+    FROM machine_beacon_data
+    WHERE machine_id = ?
+    ORDER BY timestamp DESC
+    LIMIT 1;   -- latest beacon reading
+  `;
 
   db.query(machineSql, [machineId], (err, machineResults) => {
     if (err) return res.status(500).json({ error: "Database error" });
@@ -38,9 +57,14 @@ router.get("/:id", (req, res) => {
     db.query(logsSql, [machineId], (err2, logResults) => {
       if (err2) return res.status(500).json({ error: "Database error" });
 
-      res.json({
-        machine: machineResults[0],
-        logs: logResults
+      db.query(beaconSql, [machineId], (err3, beaconResults) => {
+        if (err3) return res.status(500).json({ error: "Database error" });
+
+        res.json({
+          machine: machineResults[0],
+          logs: logResults,
+          beacon: beaconResults.length ? beaconResults[0] : null
+        });
       });
     });
   });
