@@ -11,14 +11,14 @@ router.get("/", (req, res) => {
   });
 });
 
-// Get truck by ID with logs + tracker data
+// Get truck by ID with logs + tracker data + latest location
 router.get("/:id", (req, res) => {
   const truckId = req.params.id;
   const { date } = req.query; // YYYY-MM-DD from frontend
 
   const truckSql = "SELECT * FROM trucks WHERE id = ?";
 
-  // Filter logs by date if provided
+  // Logs query (history, optionally filter by date)
   let logsSql = `
     SELECT 
       id,
@@ -40,7 +40,7 @@ router.get("/:id", (req, res) => {
   }
   logsSql += " ORDER BY log_time;";
 
-  // Filter tracker data by date if provided
+  // Tracker query (latest tracker data, optionally filter by date)
   let trackerSql = `
     SELECT 
       id,
@@ -69,24 +69,41 @@ router.get("/:id", (req, res) => {
   }
   trackerSql += " ORDER BY timestamp DESC LIMIT 1;";
 
+  // Latest location query (separate from logs, always available)
+  let latestLocationSql = `
+    SELECT current_location, log_time
+    FROM truck_logs
+    WHERE truck_id = ?
+  `;
+  const latestLocParams = [truckId];
+  if (date) {
+    latestLocationSql += " AND DATE(log_time) = ?";
+    latestLocParams.push(date);
+  }
+  latestLocationSql += " ORDER BY log_time DESC LIMIT 1;";
+
+  // Run queries
   db.query(truckSql, [truckId], (err, truckResults) => {
     if (err) return res.status(500).json({ error: "Database error" });
     if (truckResults.length === 0) {
       return res.status(404).json({ error: "Truck not found" });
     }
 
-    // Logs query
     db.query(logsSql, logParams, (err2, logResults) => {
       if (err2) return res.status(500).json({ error: "Database error" });
 
-      // Tracker query
       db.query(trackerSql, trackerParams, (err3, trackerResults) => {
         if (err3) return res.status(500).json({ error: "Database error" });
 
-        res.json({
-          truck: truckResults[0],
-          logs: logResults,
-          tracker: trackerResults.length ? trackerResults[0] : null,
+        db.query(latestLocationSql, latestLocParams, (err4, locationResults) => {
+          if (err4) return res.status(500).json({ error: "Database error" });
+
+          res.json({
+            truck: truckResults[0],
+            logs: logResults, // full logs (possibly filtered by date)
+            tracker: trackerResults.length ? trackerResults[0] : null, // latest tracker data
+            location: locationResults.length ? locationResults[0] : null // latest location
+          });
         });
       });
     });

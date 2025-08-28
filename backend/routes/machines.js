@@ -25,6 +25,8 @@ router.get("/:id", (req, res) => {
       fuel_consumption,
       material_processed,
       state,
+      latitude,
+      longitude,
       log_date
     FROM machine_logs
     WHERE machine_id = ?
@@ -43,7 +45,9 @@ router.get("/:id", (req, res) => {
       rssi,
       txPower,
       batteryLevel,
-      status
+      status,
+      latitude,
+      longitude
     FROM machine_beacon_data
     WHERE machine_id = ?
     ORDER BY timestamp DESC
